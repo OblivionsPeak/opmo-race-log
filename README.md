@@ -14,62 +14,88 @@ python -m http.server 4790
 Opening `index.html` straight off disk will not work: the browser blocks the
 `fetch` of `data/races.json` on `file://`.
 
-## Adding races
+## Adding races — the CSV route (this is the one that works)
 
-### Automatically, from iRacing
+On the iRacing results page for a race, use the export button. You get
+`eventresult_<subsessionid>_0.csv`. Then:
 
 ```bash
-cp .env.example .env          # fill in your iRacing OAuth credentials
-python scripts/pull_races.py --list-entries 71234567    # see who was in the race
-# put your drivers' cust_ids into scripts/team.json, then:
-python scripts/pull_races.py 71234567 71298765 --season "2026 Season 3"
+# see every team in the race and confirm which one is ours
+python scripts/import_results_csv.py --list  eventresult_85426101_0.csv
+
+# import it
+python scripts/import_results_csv.py eventresult_85426101_0.csv
 ```
 
-The puller finds your team's entry, writes the record into `data/races.json`,
-and caches the stock car image into `images/cars/`. Re-running an ID updates
-that race in place — it never duplicates, and it never overwrites `livery_image`,
-`season`, `event`, or `notes` if you edited them by hand.
+It pulls date, event, track, class, car, start and finish position, laps, laps
+led, incidents, best lap, car number, strength of field, the full driver lineup,
+and the season label (derived from the export's season year + quarter).
 
-**Requires an iRacing OAuth client authorised for the `password_limited`
-grant** — see "Auth" below.
+Which entry is ours comes from `scripts/team.json` — `cust_ids` is checked first
+and is the reliable match; `team_names` substrings are the fallback and are what
+currently matches "OpMo Enduro Alpha".
 
-### By hand
+> If OpMo ever runs two entries in the same race, the importer takes the first
+> match. Add the specific `cust_ids` for the car you want, or import once per
+> car and edit `data/races.json` by hand.
+
+Re-importing the same race updates it in place — it never duplicates, and it
+never overwrites `livery_image`, `season`, `event`, or `notes` if you edited
+them by hand.
+
+### Adding races by hand
 
 Add an object to `data/races.json`. Every field the page reads is documented in
-`data/races.example.json`. Only `event` (or `track`) is really required; the
-card degrades gracefully as fields go missing.
+`data/races.example.json`. Only `event` (or `track`) is really required; cards
+degrade gracefully as fields go missing.
 
 ## Car images
 
-Two sources, livery wins:
+**You supply these.** iRacing's catalog art is only reachable through the Data
+API, which is closed to us (see below), so there is no automatic source.
 
-1. **`livery_image`** — a real picture of the team car. Drop it in
-   `images/liveries/` (see the README there). Displayed edge-to-edge.
-2. **`car_image`** — the stock iRacing catalog art, cached automatically by the
-   puller into `images/cars/<car_id>.jpg`. Displayed on a light backdrop
-   because the catalog art is a cutout.
+Drop an image in `images/liveries/` named `<subsession_id>.jpg` and point the
+race at it:
 
-If neither exists the card shows a quiet "no image yet" placeholder rather than
-a broken image.
+```json
+"livery_image": "images/liveries/85426101.jpg"
+```
 
-## Auth
+Good sources, best first:
 
-`scripts/iracing_client.py` uses iRacing's OAuth2 `password_limited` grant. The
-credential masking is `base64(sha256(value + identifier.trim().lower()))` with
-**standard** base64 — the token endpoint explicitly rejects URL-safe base64.
+1. **Clearcoat's Showroom** — load the team livery and grab a still. Cleanest
+   result, correct car, correct livery, no HUD.
+2. **An iRacing replay screenshot** — free camera, hide the UI, chase or trackside.
+3. **A broadcast frame** from the race itself.
 
-As of 2026-07-29 this returns `invalid_client` with the credentials in
-`operation-motorsport-dashboard/.env`. The request format was verified correct
-against iRacing's spec, so the fix is on the account side:
+Landscape crops near 16:9 look best; the card crops to fill.
 
-1. Open <https://oauth.iracing.com/accountmanagement> and confirm the OAuth
-   client still exists and is enabled.
-2. Confirm it is authorised for the **`password_limited`** grant. iRacing does
-   not enable that grant by default — it is granted per client on request.
-3. Regenerate the client secret and paste it into `.env`.
+If a race has no image the card shows a quiet "no image yet" placeholder rather
+than a broken image, so it is safe to import everything now and add pictures
+later.
 
-Until that is sorted the puller cannot run, but the site works fine with
-hand-entered races.
+## About the iRacing API (why there's a dead script in here)
+
+`scripts/pull_races.py` and `scripts/iracing_client.py` would pull races
+directly by subsession ID. They cannot run right now, and it is not a bug:
+
+- iRacing **removed legacy `/auth`** on 9 December 2025 (2026 Season 1). The
+  endpoint now returns HTTP 405. Verified 2026-07-29.
+- The replacement is OAuth2, and client IDs are **issued only by iRacing on
+  request** — there is no self-service page in account management.
+- iRacing has **paused issuing new OAuth client IDs** while they evaluate
+  third-party API usage, and say they will announce on the forums when it
+  reopens.
+
+The credentials in `operation-motorsport-dashboard/.env` return
+`invalid_client` because they were never a real registered client. The request
+format itself was verified correct against iRacing's spec (standard base64
+masking — the token endpoint explicitly rejects URL-safe base64), so if a client
+ID is ever issued, `pull_races.py` should work with only the secret pasted into
+`.env`.
+
+Until then the CSV importer is the supported path and needs no credentials at
+all.
 
 ## Deploying
 
