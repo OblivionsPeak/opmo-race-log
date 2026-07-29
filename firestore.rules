@@ -1,0 +1,25 @@
+// Firestore security rules for the OpMo endurance race log.
+//
+// ⚠ The Firebase project (operation-motorsport-scoring) is shared with the
+// endurance signup app and other OpMo tools. Do NOT replace your existing
+// rules with this file wholesale — copy the `match` block below INTO your
+// existing ruleset, alongside the blocks the other apps rely on.
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /endurance_race_log/{raceId} {
+      // The race log is a public showcase — anyone may read it.
+      allow read: if true;
+
+      // Writing requires the shared team account (team@opmo-endurance.app).
+      // This is deliberately stricter than endurance_races, where creation is
+      // public: that collection is a signup queue the TP curates, while this
+      // one is published team history that shouldn't be editable by the world.
+      // Rotating the account's password in the Firebase console revokes
+      // everyone's access at once.
+      allow create, update, delete: if request.auth != null;
+    }
+  }
+}

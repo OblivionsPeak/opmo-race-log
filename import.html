@@ -108,32 +108,28 @@
     <div id="preview"></div>
   </div>
 
+  <div class="step" id="signinStep">
+    <h2>3 · Sign in</h2>
+    <p>Publishing needs the team passcode — ask in the team Discord. It's the same
+       for everyone and keeps the race log from being editable by the public.</p>
+    <label for="pass">Team passcode</label>
+    <input type="password" id="pass" placeholder="••••••••" autocomplete="current-password">
+    <div class="row">
+      <button id="signin" class="ghost">Sign in</button>
+      <button id="signout" class="ghost" hidden>Sign out</button>
+    </div>
+    <div id="authMsg" class="msg"></div>
+  </div>
+
   <div class="step">
-    <h2>3 · Publish</h2>
-    <p>Save the updated file and commit it, or let this page push it to GitHub for you.</p>
+    <h2>4 · Publish</h2>
+    <p>Publishing puts the races straight on the site — no commit, no deploy wait.
+       Downloading is the escape hatch if you'd rather commit the file yourself.</p>
 
     <div class="row">
-      <button id="download" disabled>Download races.json</button>
-      <button id="publish" class="ghost" disabled>Publish to GitHub</button>
+      <button id="publish" disabled>Publish to the race log</button>
+      <button id="download" class="ghost" disabled>Download races.json</button>
     </div>
-
-    <details>
-      <summary>GitHub token setup (one time)</summary>
-      <label for="token">Fine-grained personal access token</label>
-      <input type="password" id="token" placeholder="github_pat_..." autocomplete="off">
-      <div class="hint">
-        Create at <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">
-        github.com/settings/personal-access-tokens</a> — scope it to
-        <strong>only</strong> the <code>opmo-race-log</code> repo with
-        <strong>Contents: Read and write</strong>. Nothing else.<br>
-        Stored in this browser's localStorage on this machine only; never sent anywhere but github.com.
-        Revoke it any time from the same settings page.
-      </div>
-      <div class="row">
-        <button id="saveToken" class="ghost">Save token</button>
-        <button id="clearToken" class="ghost">Forget token</button>
-      </div>
-    </details>
 
     <div id="pubMsg" class="msg"></div>
   </div>
@@ -143,11 +139,25 @@
 
 <script>
 const $ = id => document.getElementById(id);
-const REPO = 'OblivionsPeak/opmo-race-log';
-const BRANCH = 'master';
-const PATH = 'data/races.json';
 const PRESERVE = ['livery_image', 'season', 'event', 'notes'];
-const TOKEN_KEY = 'opmo-race-log-token';
+
+// Shared OpMo Firebase project — same one the endurance signup app uses.
+// Public by design; Firestore rules are the actual access control.
+const FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyBCmOk5BeUOcX7y_0araxAqco_hJ8E4H94",
+  authDomain:        "operation-motorsport-scoring.firebaseapp.com",
+  projectId:         "operation-motorsport-scoring",
+  storageBucket:     "operation-motorsport-scoring.firebasestorage.app",
+  messagingSenderId: "464083122390",
+  appId:             "1:464083122390:web:12f78d594c8ea51fa1b177"
+};
+const RACE_COLLECTION = 'endurance_race_log';
+// One shared account the whole team signs into. Rotating the password in the
+// Firebase console revokes access for everyone at once.
+const TEAM_EMAIL = 'team@opmo-endurance.app';
+
+let fb = null;      // lazily-loaded firebase handles
+let signedIn = false;
 
 let existing = [];      // races already published
 let merged = [];        // existing + newly imported
@@ -294,21 +304,37 @@ function mergeRecords(records) {
 
 function renderPreview() {
   if (!merged.length) { $('preview').innerHTML = ''; return; }
-  const rows = merged.map(r => `
+  const rows = merged.map((r, i) => `
     <tr class="${newIds.has(r.subsession_id) ? 'new' : ''}">
       <td>${esc(r.date || '')}</td>
       <td>${esc(r.event || '')}</td>
       <td class="pos">${r.finish_position ? 'P' + r.finish_position : '—'}</td>
       <td>${esc(r.car || '')}</td>
       <td>${(r.drivers || []).length}</td>
+      <td><input class="img" data-i="${i}" type="text" placeholder="paste image URL"
+                 value="${esc(r.livery_image || '')}"></td>
     </tr>`).join('');
   $('preview').innerHTML = `
     <table>
-      <thead><tr><th>Date</th><th>Event</th><th>Finish</th><th>Car</th><th>Drivers</th></tr></thead>
+      <thead><tr>
+        <th>Date</th><th>Event</th><th>Finish</th><th>Car</th><th>Drivers</th><th>Car photo</th>
+      </tr></thead>
       <tbody>${rows}</tbody>
-    </table>`;
+    </table>
+    <div class="hint">Paste a link to a photo or render of the car and it replaces the
+      placeholder on the race card. Any public image URL works.</div>`;
+
+  $('preview').querySelectorAll('input.img').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const rec = merged[Number(inp.dataset.i)];
+      const val = inp.value.trim();
+      if (val) rec.livery_image = val; else delete rec.livery_image;
+      if (rec.subsession_id) newIds.add(rec.subsession_id);   // mark it for publish
+    });
+  });
+
   $('download').disabled = false;
-  $('publish').disabled = !localStorage.getItem(TOKEN_KEY);
+  $('publish').disabled = !signedIn;
 }
 
 const esc = s => String(s).replace(/[&<>"']/g,
@@ -358,80 +384,116 @@ $('download').addEventListener('click', () => {
   msg($('pubMsg'), 'Saved. Replace <code>data/races.json</code> in the repo with it and push.', 'ok');
 });
 
-$('saveToken').addEventListener('click', () => {
-  const t = $('token').value.trim();
-  if (!t) return msg($('pubMsg'), 'Paste a token first.', 'err');
-  localStorage.setItem(TOKEN_KEY, t);
-  $('token').value = '';
-  $('publish').disabled = !merged.length;
-  msg($('pubMsg'), 'Token saved in this browser. Publish is enabled.', 'ok');
-});
-
-$('clearToken').addEventListener('click', () => {
-  localStorage.removeItem(TOKEN_KEY);
-  $('publish').disabled = true;
-  msg($('pubMsg'), 'Token forgotten.', 'ok');
-});
-
-// UTF-8 safe base64 — driver names are not all ASCII
-function b64(str) {
-  const bytes = new TextEncoder().encode(str);
-  let bin = '';
-  bytes.forEach(b => bin += String.fromCharCode(b));
-  return btoa(bin);
+/* ---------- Firebase ---------- */
+async function firebase() {
+  if (fb) return fb;
+  const [appMod, storeMod, authMod] = await Promise.all([
+    import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js'),
+    import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js'),
+    import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js'),
+  ]);
+  const app = appMod.initializeApp(FIREBASE_CONFIG);
+  fb = {
+    db: storeMod.getFirestore(app),
+    auth: authMod.getAuth(app),
+    ...storeMod, ...authMod,
+  };
+  // a returning teammate is already signed in — reflect that without asking
+  fb.onAuthStateChanged(fb.auth, user => {
+    signedIn = !!user;
+    $('signout').hidden = !user;
+    $('signin').hidden = !!user;
+    $('pass').disabled = !!user;
+    $('publish').disabled = !user || !merged.length;
+    if (user) msg($('authMsg'), 'Signed in — publishing enabled.', 'ok');
+  });
+  return fb;
 }
 
+$('signin').addEventListener('click', async () => {
+  const pw = $('pass').value;
+  if (!pw) return msg($('authMsg'), 'Enter the team passcode.', 'err');
+  $('signin').disabled = true;
+  msg($('authMsg'), 'Signing in…', 'ok');
+  try {
+    const f = await firebase();
+    await f.signInWithEmailAndPassword(f.auth, TEAM_EMAIL, pw);
+    $('pass').value = '';
+  } catch (e) {
+    const wrong = /wrong-password|invalid-credential|user-not-found/.test(e.code || '');
+    msg($('authMsg'), wrong
+      ? 'That passcode was not accepted. Check the team Discord for the current one.'
+      : 'Sign-in failed: ' + esc(e.message), 'err');
+  } finally {
+    $('signin').disabled = false;
+  }
+});
+
+$('signout').addEventListener('click', async () => {
+  const f = await firebase();
+  await f.signOut(f.auth);
+  msg($('authMsg'), 'Signed out.', 'ok');
+});
+
 $('publish').addEventListener('click', async () => {
-  const token = localStorage.getItem(TOKEN_KEY);
-  if (!token) return msg($('pubMsg'), 'No token saved — open the setup section below.', 'err');
+  if (!signedIn) return msg($('pubMsg'), 'Sign in with the team passcode first.', 'err');
+
+  // everything with an id goes up: merge:true means a re-publish never wipes a
+  // field somebody else set (a car photo especially)
+  const toPublish = merged.filter(r => r.subsession_id);
+  if (!toPublish.length) return msg($('pubMsg'), 'Nothing to publish yet.', 'err');
 
   $('publish').disabled = true;
-  msg($('pubMsg'), 'Publishing…', 'ok');
-  const api = `https://api.github.com/repos/${REPO}/contents/${PATH}`;
-  const headers = { Authorization: 'Bearer ' + token, Accept: 'application/vnd.github+json' };
-
+  msg($('pubMsg'), `Publishing ${toPublish.length} race(s)…`, 'ok');
   try {
-    // the update needs the current blob sha
-    let sha;
-    const cur = await fetch(`${api}?ref=${BRANCH}`, { headers });
-    if (cur.ok) sha = (await cur.json()).sha;
-    else if (cur.status !== 404) throw new Error(`could not read the file (HTTP ${cur.status})`);
-
-    const res = await fetch(api, {
-      method: 'PUT', headers,
-      body: JSON.stringify({
-        message: `data: import ${newIds.size || merged.length} race(s) via the browser importer`,
-        content: b64(jsonText()),
-        branch: BRANCH,
-        ...(sha ? { sha } : {}),
-      }),
-    });
-
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(`${res.status} ${body.message || res.statusText}`);
+    const f = await firebase();
+    for (const rec of toPublish) {
+      await f.setDoc(
+        f.doc(f.db, RACE_COLLECTION, String(rec.subsession_id)),
+        { ...rec, updatedAt: f.serverTimestamp() },
+        { merge: true }
+      );
     }
     newIds.clear();
     renderPreview();
     msg($('pubMsg'),
-      'Published. GitHub Pages rebuilds in a minute or two — ' +
-      '<a href="index.html">check the race log</a>.', 'ok');
+      `Published ${toPublish.length} race(s). They're live now — ` +
+      '<a href="index.html">open the race log</a>.', 'ok');
   } catch (e) {
     msg($('pubMsg'), 'Publish failed: ' + esc(e.message) +
-      '<br>Check the token is not expired and has <b>Contents: Read and write</b> on this repo.', 'err');
+      '<br>If this says "permission denied", the Firestore rules for ' +
+      `<code>${RACE_COLLECTION}</code> have not been added yet.`, 'err');
   } finally {
     $('publish').disabled = false;
   }
 });
 
 /* ---------- boot ---------- */
+async function publishedRaces() {
+  try {
+    const f = await firebase();
+    const snap = await f.getDocs(f.collection(f.db, RACE_COLLECTION));
+    return snap.docs.map(d => d.data());
+  } catch (err) {
+    console.warn('could not read published races:', err);
+    return [];
+  }
+}
+
 Promise.all([
   fetch('data/races.json', { cache: 'no-store' }).then(r => r.ok ? r.json() : []).catch(() => []),
   fetch('scripts/team.json', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null),
-]).then(([races, cfg]) => {
-  existing = Array.isArray(races) ? races : [];
-  merged = existing.slice();
+  publishedRaces(),
+]).then(([races, cfg, cloud]) => {
   if (cfg) teamCfg = cfg;
+  // start from what's already published so the preview is the real current
+  // state and a re-import updates rather than duplicates
+  const byId = new Map();
+  for (const r of (Array.isArray(races) ? races : [])) if (r.subsession_id) byId.set(r.subsession_id, r);
+  for (const r of cloud) if (r.subsession_id) byId.set(r.subsession_id, r);
+  existing = [...byId.values()];
+  merged = existing.slice()
+    .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
   renderPreview();
   $('download').disabled = !merged.length;
 });

@@ -14,6 +14,30 @@ python -m http.server 4790
 Opening `index.html` straight off disk will not work: the browser blocks the
 `fetch` of `data/races.json` on `file://`.
 
+## For teammates: adding a race
+
+Open **[the import page](https://oblivionspeak.github.io/opmo-race-log/import.html)**,
+drop in the CSV iRacing gives you on the results page, paste a photo of the car
+if you have one, enter the team passcode, hit Publish. It's live immediately —
+no GitHub, no terminal, nothing to install.
+
+### One-time Firebase setup (owner only)
+
+The race log stores races in Firestore in the shared
+`operation-motorsport-scoring` project — the same one the endurance signup app
+uses. Two things must exist before Publish will work:
+
+1. **The shared team account.** Firebase console → Authentication → Users → Add
+   user: `team@opmo-endurance.app` with a password you're happy to share in the
+   team Discord. Rotating that password revokes everyone at once.
+2. **The rules.** Copy the `match /endurance_race_log/{raceId}` block from
+   `firestore.rules` **into** the project's existing ruleset. Do not paste the
+   file over the top — the signup app's rules live in the same ruleset.
+
+Reads are public, writes require that account. The site shows races from
+Firestore *and* from `data/races.json`, so anything committed to the repo keeps
+working even if Firebase is unreachable.
+
 ## Adding races — the CSV route (this is the one that works)
 
 On the iRacing results page for a race, use the export button. You get

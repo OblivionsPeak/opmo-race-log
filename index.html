@@ -154,6 +154,18 @@
 const $ = id => document.getElementById(id);
 let RACES = [], activeSeason = 'all';
 
+// Shared OpMo Firebase project — the same one the endurance signup app uses.
+// These values are public by design (Firestore rules are the access control).
+const FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyBCmOk5BeUOcX7y_0araxAqco_hJ8E4H94",
+  authDomain:        "operation-motorsport-scoring.firebaseapp.com",
+  projectId:         "operation-motorsport-scoring",
+  storageBucket:     "operation-motorsport-scoring.firebasestorage.app",
+  messagingSenderId: "464083122390",
+  appId:             "1:464083122390:web:12f78d594c8ea51fa1b177"
+};
+const RACE_COLLECTION = 'endurance_race_log';
+
 const ORDINAL = n => {
   if (!n) return '—';
   const s = ['th','st','nd','rd'], v = n % 100;
@@ -312,20 +324,54 @@ function buildFilters() {
   });
 }
 
-fetch('data/races.json', { cache: 'no-store' })
-  .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
-  .then(data => {
-    RACES = (Array.isArray(data) ? data : data.races || [])
-      // newest first; undated entries sink to the bottom rather than vanishing
-      .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
-    buildFilters();
-    render();
-  })
-  .catch(err => {
+/* ---------- data: Firestore first, races.json as the floor ---------- */
+// Races committed to the repo still show even if Firebase is unreachable, and
+// anything a teammate uploads wins over the committed copy for the same race.
+async function fromRepo() {
+  try {
+    const r = await fetch('data/races.json', { cache: 'no-store' });
+    if (!r.ok) return [];
+    const d = await r.json();
+    return Array.isArray(d) ? d : (d.races || []);
+  } catch { return []; }
+}
+
+async function fromFirestore() {
+  try {
+    const [{ initializeApp }, { getFirestore, collection, getDocs }] = await Promise.all([
+      import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js'),
+      import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js'),
+    ]);
+    const app = initializeApp(FIREBASE_CONFIG);
+    const snap = await getDocs(collection(getFirestore(app), RACE_COLLECTION));
+    return snap.docs.map(d => d.data());
+  } catch (err) {
+    console.warn('Firestore unavailable, showing committed races only:', err);
+    return null;                       // null = failed, [] = genuinely empty
+  }
+}
+
+Promise.all([fromRepo(), fromFirestore()]).then(([repo, cloud]) => {
+  const byId = new Map();
+  for (const r of repo) byId.set(r.subsession_id ?? Symbol(), r);
+  for (const r of (cloud || [])) byId.set(r.subsession_id ?? Symbol(), r);
+
+  RACES = [...byId.values()]
+    // newest first; undated entries sink to the bottom rather than vanishing
+    .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+
+  buildFilters();
+  render();
+
+  if (!RACES.length) {
     $('empty').hidden = false;
-    $('empty').innerHTML = 'Could not load <code>data/races.json</code> — ' + err.message +
-      '<br>If you opened this file directly, serve the folder instead: <code>python -m http.server</code>';
-  });
+    if (cloud === null) {
+      $('empty').innerHTML =
+        'No races to show, and the live database could not be reached.<br>' +
+        'If you opened this file directly, serve the folder instead: <code>python -m http.server</code>';
+    }
+  }
+});
 </script>
 </body>
 </html>
