@@ -1,0 +1,5 @@
+{
+  "_comment": "How the puller decides which entry in a race is ours. cust_ids is the reliable one — team names on iRacing entries are inconsistent between events. Run: python scripts/pull_races.py --list-entries <subsession_id> to see the names and cust_ids from a real race, then fill these in.",
+  "team_names": ["Operation Motorsport", "OpMo"],
+  "cust_ids": []
+}

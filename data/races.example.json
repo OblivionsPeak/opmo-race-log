@@ -1,0 +1,21 @@
+[
+  {
+    "_comment": "ILLUSTRATIVE EXAMPLE ONLY — not a real OpMo result. Shows every field the site reads. Copy the shape, not the values.",
+    "subsession_id": 12345678,
+    "season": "2026 Season 3",
+    "date": "2026-03-21",
+    "event": "Sebring 12 Hours",
+    "track": "Sebring International Raceway",
+    "length": "12h",
+    "class": "GTP",
+    "car": "Porsche 963 GTP",
+    "car_id": 173,
+    "finish_position": 6,
+    "starting_position": 9,
+    "laps": 348,
+    "incidents": 14,
+    "drivers": ["Driver One", "Driver Two", "Driver Three"],
+    "car_image": "images/cars/173.jpg",
+    "livery_image": "images/liveries/12345678.jpg"
+  }
+]

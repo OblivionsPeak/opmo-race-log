@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpMo Endurance — Race Log</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0e1210; --panel:#161c19; --panel-2:#1d2521; --line:#2a3630;
+    --ink:#eef2f0; --dim:#93a49c; --green:#81c784; --green-dim:#4c7a58;
+    --gold:#ffd700; --shadow:0 8px 30px rgba(0,0,0,.45);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:'Chakra Petch','Segoe UI',sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--green); text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  /* ---- header ---- */
+  header{
+    padding:44px 24px 28px; text-align:center;
+    background:
+      radial-gradient(120% 100% at 50% 0%, rgba(129,199,132,.13), transparent 60%),
+      linear-gradient(#121714,#0e1210);
+    border-bottom:1px solid var(--line);
+  }
+  h1{
+    margin:0; font-size:clamp(28px,5vw,46px); font-weight:700;
+    letter-spacing:.06em; text-transform:uppercase;
+  }
+  h1 .accent{color:var(--green)}
+  .tagline{margin:10px 0 0; color:var(--dim); letter-spacing:.16em; text-transform:uppercase; font-size:13px}
+
+  /* ---- season stat strip ---- */
+  .stats{
+    display:flex; flex-wrap:wrap; justify-content:center; gap:10px;
+    max-width:1200px; margin:26px auto 0; padding:0 24px;
+  }
+  .stat{
+    background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:12px 20px; min-width:104px;
+  }
+  .stat .n{font-size:26px; font-weight:700; color:var(--gold); line-height:1}
+  .stat .l{font-size:11px; color:var(--dim); text-transform:uppercase; letter-spacing:.12em; margin-top:6px}
+
+  /* ---- filters ---- */
+  .filters{
+    display:flex; flex-wrap:wrap; gap:8px; justify-content:center;
+    max-width:1200px; margin:26px auto 0; padding:0 24px;
+  }
+  .chip{
+    background:var(--panel); border:1px solid var(--line); color:var(--dim);
+    border-radius:999px; padding:7px 16px; font:inherit; font-size:13px;
+    cursor:pointer; transition:.15s;
+  }
+  .chip:hover{border-color:var(--green-dim); color:var(--ink)}
+  .chip[aria-pressed="true"]{background:var(--green); border-color:var(--green); color:#0e1210; font-weight:600}
+
+  /* ---- race grid ---- */
+  main{max-width:1200px; margin:0 auto; padding:30px 24px 70px}
+  .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:20px}
+
+  .race{
+    background:var(--panel); border:1px solid var(--line); border-radius:14px;
+    overflow:hidden; box-shadow:var(--shadow); display:flex; flex-direction:column;
+    transition:transform .18s, border-color .18s;
+  }
+  .race:hover{transform:translateY(-3px); border-color:var(--green-dim)}
+
+  .shot{
+    position:relative; aspect-ratio:16/9; background:var(--panel-2);
+    display:flex; align-items:center; justify-content:center; overflow:hidden;
+  }
+  .shot img{width:100%; height:100%; object-fit:cover; display:block}
+  /* stock catalog art is a cutout on white — contain it instead of cropping */
+  .shot img.stock{object-fit:contain; padding:12px; background:#e9edeb}
+  .shot .noimg{color:var(--dim); font-size:12px; letter-spacing:.14em; text-transform:uppercase}
+
+  .badge{
+    position:absolute; top:10px; left:10px; background:rgba(14,18,16,.86);
+    border:1px solid var(--line); border-radius:6px; padding:4px 10px;
+    font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--green);
+    backdrop-filter:blur(4px);
+  }
+  .finish{
+    position:absolute; top:10px; right:10px; background:rgba(14,18,16,.86);
+    border:1px solid var(--line); border-radius:6px; padding:4px 10px;
+    font-size:13px; font-weight:700; backdrop-filter:blur(4px);
+  }
+  .finish.podium{color:var(--gold); border-color:var(--gold)}
+
+  .body{padding:16px 18px 18px; display:flex; flex-direction:column; gap:10px; flex:1}
+  .event{font-size:19px; font-weight:700; line-height:1.25}
+  .meta{color:var(--dim); font-size:13px; display:flex; flex-wrap:wrap; gap:4px 12px}
+  .car{color:var(--green); font-size:13px; font-weight:600}
+
+  .drivers{display:flex; flex-wrap:wrap; gap:6px; margin-top:2px}
+  .driver{
+    background:var(--panel-2); border:1px solid var(--line); border-radius:6px;
+    padding:3px 9px; font-size:12px; color:var(--ink);
+  }
+  .foot{
+    margin-top:auto; padding-top:10px; border-top:1px solid var(--line);
+    display:flex; justify-content:space-between; align-items:center; font-size:12px; color:var(--dim);
+  }
+
+  .empty{text-align:center; color:var(--dim); padding:70px 20px; line-height:1.7}
+  .empty code{background:var(--panel); border:1px solid var(--line); padding:2px 7px; border-radius:5px; color:var(--green)}
+
+  footer{
+    text-align:center; color:var(--dim); font-size:12px;
+    padding:26px 24px 40px; border-top:1px solid var(--line);
+  }
+  @media (max-width:520px){ .grid{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>OpMo <span class="accent">Endurance</span></h1>
+  <p class="tagline">Race Log</p>
+</header>
+
+<div class="stats" id="stats"></div>
+<div class="filters" id="filters"></div>
+
+<main>
+  <div class="grid" id="grid"></div>
+  <div class="empty" id="empty" hidden>
+    No races yet. Add them to <code>data/races.json</code> — or run
+    <code>python scripts/pull_races.py &lt;subsession_id&gt;</code> to pull them from iRacing.
+  </div>
+</main>
+
+<footer>Operation Motorsport · Endurance Team</footer>
+
+<script>
+const $ = id => document.getElementById(id);
+let RACES = [], activeSeason = 'all';
+
+const ORDINAL = n => {
+  if (!n) return '—';
+  const s = ['th','st','nd','rd'], v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+};
+
+const fmtDate = iso => {
+  if (!iso) return '';
+  // parse as plain calendar date — no timezone shifting the round back a day
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  if (!y) return iso;
+  return new Date(y, m - 1, d).toLocaleDateString(undefined,
+    { year:'numeric', month:'short', day:'numeric' });
+};
+
+function imageFor(race) {
+  // team livery wins; stock catalog art is the fallback
+  if (race.livery_image) return { src: race.livery_image, stock:false };
+  if (race.car_image)    return { src: race.car_image,    stock:true  };
+  return null;
+}
+
+function raceCard(r) {
+  const el = document.createElement('article');
+  el.className = 'race';
+
+  const img = imageFor(r);
+  const pos = Number(r.finish_position) || 0;
+  const podium = pos > 0 && pos <= 3;
+
+  const shot = document.createElement('div');
+  shot.className = 'shot';
+  if (img) {
+    const im = document.createElement('img');
+    im.src = img.src;
+    im.alt = r.car || r.event || 'race car';
+    im.loading = 'lazy';
+    if (img.stock) im.className = 'stock';
+    // a missing file should degrade to the placeholder, not a broken icon
+    im.onerror = () => { im.remove(); shot.appendChild(placeholder()); };
+    shot.appendChild(im);
+  } else {
+    shot.appendChild(placeholder());
+  }
+  if (r.class) {
+    const b = document.createElement('span');
+    b.className = 'badge'; b.textContent = r.class;
+    shot.appendChild(b);
+  }
+  if (pos) {
+    const f = document.createElement('span');
+    f.className = 'finish' + (podium ? ' podium' : '');
+    f.textContent = 'P' + pos;
+    shot.appendChild(f);
+  }
+  el.appendChild(shot);
+
+  const body = document.createElement('div');
+  body.className = 'body';
+
+  const ev = document.createElement('div');
+  ev.className = 'event';
+  ev.textContent = r.event || r.track || 'Race';
+  body.appendChild(ev);
+
+  const meta = document.createElement('div');
+  meta.className = 'meta';
+  [fmtDate(r.date), r.track, r.length].filter(Boolean).forEach(t => {
+    const s = document.createElement('span'); s.textContent = t; meta.appendChild(s);
+  });
+  body.appendChild(meta);
+
+  if (r.car) {
+    const c = document.createElement('div');
+    c.className = 'car'; c.textContent = r.car;
+    body.appendChild(c);
+  }
+
+  if (Array.isArray(r.drivers) && r.drivers.length) {
+    const d = document.createElement('div');
+    d.className = 'drivers';
+    r.drivers.forEach(n => {
+      const s = document.createElement('span');
+      s.className = 'driver'; s.textContent = n;
+      d.appendChild(s);
+    });
+    body.appendChild(d);
+  }
+
+  const foot = document.createElement('div');
+  foot.className = 'foot';
+  const left = document.createElement('span');
+  left.textContent = [r.season, pos ? ORDINAL(pos) + ' place' : null]
+    .filter(Boolean).join(' · ');
+  foot.appendChild(left);
+  if (r.subsession_id) {
+    const a = document.createElement('a');
+    a.href = 'https://members.iracing.com/web/racing/results-stats/results?subsessionid=' + r.subsession_id;
+    a.target = '_blank'; a.rel = 'noopener';
+    a.textContent = 'Results ↗';
+    foot.appendChild(a);
+  }
+  body.appendChild(foot);
+
+  el.appendChild(body);
+  return el;
+}
+
+function placeholder() {
+  const p = document.createElement('span');
+  p.className = 'noimg';
+  p.textContent = 'no image yet';
+  return p;
+}
+
+function render() {
+  const shown = activeSeason === 'all'
+    ? RACES
+    : RACES.filter(r => (r.season || 'Unlabelled') === activeSeason);
+
+  const grid = $('grid');
+  grid.textContent = '';
+  shown.forEach(r => grid.appendChild(raceCard(r)));
+  $('empty').hidden = shown.length > 0;
+
+  const finishes = shown.map(r => Number(r.finish_position) || 0).filter(Boolean);
+  const stats = [
+    ['Races',   shown.length],
+    ['Wins',    finishes.filter(p => p === 1).length],
+    ['Podiums', finishes.filter(p => p <= 3).length],
+    ['Top 10',  finishes.filter(p => p <= 10).length],
+  ];
+  $('stats').textContent = '';
+  stats.forEach(([l, n]) => {
+    const d = document.createElement('div');
+    d.className = 'stat';
+    d.innerHTML = '<div class="n"></div><div class="l"></div>';
+    d.querySelector('.n').textContent = n;
+    d.querySelector('.l').textContent = l;
+    $('stats').appendChild(d);
+  });
+
+  document.querySelectorAll('.chip').forEach(c =>
+    c.setAttribute('aria-pressed', String(c.dataset.season === activeSeason)));
+}
+
+function buildFilters() {
+  const seasons = [...new Set(RACES.map(r => r.season || 'Unlabelled'))];
+  if (seasons.length < 2) return; // one season — a filter row adds nothing
+  const wrap = $('filters');
+  [['all', 'All'], ...seasons.map(s => [s, s])].forEach(([val, label]) => {
+    const b = document.createElement('button');
+    b.className = 'chip'; b.dataset.season = val; b.textContent = label;
+    b.addEventListener('click', () => { activeSeason = val; render(); });
+    wrap.appendChild(b);
+  });
+}
+
+fetch('data/races.json', { cache: 'no-store' })
+  .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+  .then(data => {
+    RACES = (Array.isArray(data) ? data : data.races || [])
+      // newest first; undated entries sink to the bottom rather than vanishing
+      .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+    buildFilters();
+    render();
+  })
+  .catch(err => {
+    $('empty').hidden = false;
+    $('empty').innerHTML = 'Could not load <code>data/races.json</code> — ' + err.message +
+      '<br>If you opened this file directly, serve the folder instead: <code>python -m http.server</code>';
+  });
+</script>
+</body>
+</html>
